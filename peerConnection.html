@@ -1,0 +1,323 @@
+<!doctype html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport"
+          content="width=device-width, user-scalable=no, initial-scale=1.0, maximum-scale=1.0, minimum-scale=1.0">
+    <meta http-equiv="X-UA-Compatible" content="ie=edge">
+    <title>WebTRC</title>
+    <link rel="stylesheet" href="/public/bootstrap.min.css">
+    <style>
+        .wrapper{
+            display:flex;
+            justify-content: space-around;
+            margin:10px;
+        }
+        .wrapper>.left{
+            width:40%;
+            border:solid 1px #eee;
+        }
+        .wrapper>.right{
+            width:60%;
+        }
+        .wrapper .right{
+            min-width: 500px;
+        }
+        .left .dialog{
+            padding:10px;
+            height:50vh;
+            background-color:#f3f3f3;
+            position:relative;
+            overflow-y:scroll;
+        }
+        .dialog .message{
+            width:100%;
+            position:relative;
+            float:left;
+        }
+        .alert{
+            margin:5px;
+            padding:10px;
+        }
+        .message .question{
+            float:left;
+            max-width:80%;
+            min-width:50px;
+        }
+        .message .answer{
+            float:right;
+        }
+        .left .inputContent{
+            padding:10px 20px;
+
+        }
+        .left .inputContent textarea{
+            padding:20px;
+        }
+        .message .notice{
+            min-width:50px;
+            margin:auto;
+            text-align: center;
+            font-size:13px;
+            padding:5px;
+            background-color: #ddd;
+            color:#fff;
+            -webkit-border-radius: 2px;
+            -moz-border-radius: 2px;
+            border-radius: 2px;
+        }
+        #videos video {
+            display: inline-block;
+            width: 48%;
+        }
+        #localVideo {
+            volume: 0;
+            position:absolute;
+            left: 10px;
+            top:10px;
+            z-index: 2;
+            opacity: 0.8;
+            height:120px;
+            width:160px;
+        }
+        #remoteVideo {
+
+            left: 10px;
+            top:10px;
+        }
+        .tool{
+            width:100%;
+            font-size:18px;
+            color:#999;
+            position: relative;
+            margin:0 0 15px 0;
+        }
+        .tool input[type="file"]{
+            display:none;
+        }
+        .tool #sendFile{
+            font-size: 14px;
+            color:#555;
+        }
+    </style>
+</head>
+<body>
+<div class="wrapper">
+    <div class="left">
+        <div class="">
+            <div class="dialog">
+            </div>
+            <div class="inputContent">
+                <div class="tool">
+                    <input type="file" id="chooseFile">
+                    <i id="plus" class="glyphicon glyphicon-plus-sign"></i>
+                    <i id="sendFile"></i>
+                    <button class="btn btn-warning" style="float:right" id="sendFileBtn">传送文件</button>
+                </div>
+                <textarea name="content" id="inputMess" style="width:100%;" onfocus rows="4" placeholder="Input the message">
+
+                </textarea>
+                <hr>
+                <button id="submit" class="btn btn-success" style="float: right;">发送</button>
+            </div>
+        </div>
+    </div>
+    <div class="right">
+        <div style="position:relative;float:left;">
+            <div id="videos">
+                <video id="me" autoplay></video>
+            </div>
+        </div>
+    </div>
+</div>
+<script src="/rtc_client.js"></script>
+<script>
+
+
+</script>
+<script type="text/javascript">
+    const plus = document.querySelector("#plus");
+    const file = document.querySelector("#chooseFile");
+    const videos = document.getElementById("videos");
+    const sendBtn = document.getElementById("submit");
+    const inputArea=document.querySelector("#inputMess");
+    const sendFile = document.querySelector("#sendFile");
+    const rtc = MyRTC() ;
+    const sendFileBtn = document.querySelector("#sendFileBtn");
+    /*************************点击绑定*******************************/
+    plus.addEventListener("click",function(){
+        file.click();
+    })
+    document.onkeydown=function(evt){
+        if(evt.keyCode === 13){ //绑定回车
+            document.querySelector('#submit').click();
+        }
+    };
+    file.addEventListener("change",function(){
+        console.log("change")
+        sendFile.innerText = file.value;
+    });
+    /*************************发送消息*******************************/
+    sendBtn.onclick = function(event){
+        let sendData=inputArea.value;
+        addMessage(sendData,"answer");
+        inputArea.value="";
+        inputArea.focus();
+        //广播消息
+        rtc.broadcast(JSON.stringify({
+            message:rtc.username+":"+sendData,
+            type:"message"
+        }))
+    };
+    /*************************发送文件*******************************/
+    sendFileBtn.onclick =function(evt){
+        rtc.shareFile("chooseFile");
+    }
+
+    //*****************************************************************//
+    //对方同意接收文件
+    rtc.on("send_file_accepted", function(sendId, socketId, file){
+        var p = document.getElementById("sf-" + sendId);
+        p.innerText = "对方接收" + file.name + "文件，等待发送";
+
+    });
+    //对方拒绝接收文件
+    rtc.on("send_file_refused", function(sendId, socketId, file){
+        var p = document.getElementById("sf-" + sendId);
+        p.innerText = "对方拒绝接收" + file.name + "文件";
+    });
+    //请求发送文件
+    rtc.on('send_file', function(sendId, socketId, file){
+        var p = document.createElement("p");
+        p.innerText = "请求发送" + file.name + "文件";
+        p.id = "sf-" + sendId;
+        addNotice(p);
+    });
+    //文件发送成功
+    rtc.on('sended_file', function(sendId, socketId, file){
+        var p = document.getElementById("sf-" + sendId);
+        p.parentNode.removeChild(p);
+    });
+    //发送文件碎片
+    rtc.on('send_file_chunk', function(sendId, socketId, percent, file){
+        var p = document.getElementById("sf-" + sendId);
+        p.innerText = file.name + "文件正在发送: " + Math.ceil(percent) + "%";
+    });
+    //接受文件碎片
+    rtc.on('receive_file_chunk', function(sendId, socketId, fileName, percent){
+        console.log(percent);
+        var p = document.getElementById("rf-" + sendId);
+        p.innerText = "正在接收" + fileName + "文件：" +  Math.ceil(percent) + "%";
+    });
+    //接收到文件
+    rtc.on('receive_file', function(sendId, socketId, name){
+        var p = document.getElementById("rf-" + sendId);
+        p.parentNode.removeChild(p);
+    });
+    //发送文件时出现错误
+    rtc.on('send_file_error', function(error){
+        console.log(error);
+    });
+    //接收文件时出现错误
+    rtc.on('receive_file_error', function(error){
+        console.log(error);
+    });
+    //接受到文件发送请求
+    rtc.on('receive_file_ask', function(sendId, socketId, fileName, fileSize){
+        console.log("there should be alert infomation");
+        var p;
+        if (window.confirm(socketId + "用户想要给你传送" + fileName + "文件，大小" + fileSize + "KB,是否接受？")) {
+            rtc.sendFileAccept(sendId);
+            p = document.createElement("p");
+            p.innerText = "准备接收" + fileName + "文件";
+            p.id = "rf-" + sendId;
+            addNotice(p)
+        } else {
+            rtc.sendFileRefuse(sendId);
+        }
+    });
+    //成功创建WebSocket连接
+    rtc.on("connected", function(socket) {
+        //创建本地视频流
+        rtc.createStream({
+            "video": true,
+            "audio": false
+        });
+    });
+    //创建本地视频流成功
+    rtc.on("stream_created", function(stream) {
+        document.getElementById('me').src = URL.createObjectURL(stream);
+        document.getElementById('me').play();
+    });
+    //创建本地视频流失败
+    rtc.on("stream_create_error", function() {
+        alert("create stream failed!");
+    });
+    //接收到其他用户的视频流
+    rtc.on('pc_add_stream', function(stream, socketId) {
+        const newVideo = document.createElement("video"),
+            id = "other-" + socketId;
+        newVideo.setAttribute("class", "other");
+        newVideo.setAttribute("autoplay", "autoplay");
+        newVideo.setAttribute("id", id);
+        videos.appendChild(newVideo);
+        rtc.attachStream(stream, id);
+    });
+    //删除其他用户
+    rtc.on('remove_peer', function(socketId) {
+        const video = document.getElementById('other-' + socketId);
+        if(video){
+            video.parentNode.removeChild(video);
+            rtc.broadcast(JSON.stringify({
+              type:"notice",
+              message:socketId+"用户离开聊天室"+rtc.room
+            }))
+        }
+    });
+    rtc.on("new_peer",function(socketId){
+        rtc.broadcast(JSON.stringify({
+            type:"notice",
+            message:socketId+"新用户加入聊天室"+rtc.room
+        }))
+    })
+    //接收到文字信息
+    rtc.on('data_channel_message', function(channel, username, message){
+        let data=JSON.parse(message.data);
+        console.log(data);
+        if(data.type==="message"){
+            addMessage(data.message,"question",username);
+        }
+        else if(data.type==="notice"){
+            addNotice(data.message,username);
+        }
+    });
+    //连接WebSocket服务器
+    const urls = window.location.href.substring(window.location.protocol.length).split("/");
+    rtc.connect("ws:"+urls[2], urls[urls.length - 2]);
+
+    function addMessage(data,role,username){
+
+        let message=document.createElement("div");
+        let alert=document.createElement("div");
+        message.className="message";
+        alert.className=role==="answer"?"alert alert-success answer":"alert alert-danger question";
+        alert.innerHTML=username?username+":"+data:data;
+        message.appendChild(alert);
+        document.querySelector(".dialog").appendChild(message);
+    }
+    function addNotice(data){
+        console.log(data);
+        let notice=document.createElement("div");
+        let message = document.createElement("div");
+        message.className = "message";
+        notice.className="notice";
+        message.appendChild(notice);
+        notice.appendChild(data);
+        document.querySelector(".dialog").appendChild(message);
+    }
+</script>
+<script>
+    document.querySelector("#inputMess").focus();
+</script>
+</body>
+</html>

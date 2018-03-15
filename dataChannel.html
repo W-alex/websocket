@@ -1,0 +1,42 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>DataChannel</title>
+</head>
+<body>
+    <div class="wrapper">
+        <div class="dialog"></div>
+        <div class="inputContent">
+            <textarea name="content" id="inputMess" cols="30" rows="10" placeholder="Input the message">
+
+            </textarea>
+        </div>
+    </div>
+    <script>
+        const PeerConnection=(window.PeerConnection)||
+                window.webkitPeerConnection00||
+                window.webkitRTCPeerConnection||
+                window.mozRTCPeerConnection;
+
+        const server = {
+            iceServers: [{
+                urls: 'stun:stun.l.google.com:19302'
+            }]
+        };
+        const pc=new PeerConnection(server,{optional: [{RtpDataChannels: true}]});
+        pc.ondatachannel=function(evt){
+            let receiveChannel=evt.channel;
+            receiveChannel.onmessage= function(evt){
+                console.log(evt.data);
+            }
+        }
+        const sendChannel=pc.createDataChannel("sendChannel",{reliable:false});
+
+        document.querySelector("submit").addEventListener("click",function(evt){
+            let sendData=document.querySelector("#inputMess").value;
+            sendChannel.send(sendData);
+        },false)
+    </script>
+</body>
+</html>
